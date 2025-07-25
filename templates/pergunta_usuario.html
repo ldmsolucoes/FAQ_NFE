@@ -1,0 +1,62 @@
+<div style="max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+  <h2 style="color: #153A6B; margin-top: 0;">Perguntas do Usuário</h2>
+  
+  <div id="chat-messages" style="height: 300px; overflow-y: auto; margin-bottom: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #eee;"></div>
+  
+  <div style="display: flex; gap: 10px;">
+    <input 
+      type="text" 
+      id="pergunta-input" 
+      placeholder="Digite sua pergunta..." 
+      style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"
+    >
+    <button 
+      id="enviar-pergunta"
+      style="padding: 10px 20px; background: #153A6B; color: white; border: none; border-radius: 4px; cursor: pointer;"
+    >Enviar</button>
+  </div>
+</div>
+
+<script>
+// Função para adicionar mensagens
+function adicionarMensagem(autor, texto) {
+  const chat = document.getElementById('chat-messages');
+  const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  const msgDiv = document.createElement('div');
+  msgDiv.innerHTML = `
+    <div style="margin: 8px 0; padding: 10px; 
+                background: ${autor === 'user' ? '#e3f2fd' : '#f0f0f0'}; 
+                border-radius: 8px;
+                ${autor === 'user' ? 'margin-left: 20%;' : 'margin-right: 20%;'}">
+      <strong>${autor === 'user' ? 'Você:' : 'Assistente:'}</strong> ${texto}
+      <div style="font-size: 0.8em; color: #666; text-align: right;">${hora}</div>
+    </div>
+  `;
+  chat.appendChild(msgDiv);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// Evento de envio
+document.getElementById('enviar-pergunta').addEventListener('click', async () => {
+  const input = document.getElementById('pergunta-input');
+  const pergunta = input.value.trim();
+  if (!pergunta) return;
+  
+  adicionarMensagem('user', pergunta);
+  input.value = '';
+  
+  try {
+    const response = await fetch('/processar_pergunta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pergunta })
+    });
+    const data = await response.json();
+    adicionarMensagem('bot', data.resposta);
+  } catch (error) {
+    adicionarMensagem('bot', 'Erro ao processar pergunta');
+    console.error(error);
+  }
+});
+</script>
