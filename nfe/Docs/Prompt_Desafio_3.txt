@@ -1,0 +1,112 @@
+Prompt_Desafio_3
+
+Olá!
+Sou um desenvolvedor com pouca experiencia em python e IA.
+Preciso construir um projeto para um curso que estou fazendo.
+Arquitetura que vamos utilizar:
+- acesso web pelo fastapi
+- python
+- chromaDB
+- langchain
+- llm perplexity
+
+O sistema será utilizado por pessoas que utilizam NFE do SEFAZ, para tira dúvida sobre os principais erros de processamento de NFEs.
+Fluxo:
+1. Criar/atualizar base de conhecimentos local com todos os erros e suas respostas válidas com base no SEFAZ e fontes confiáveis. A pesquisa deverá contemplar conversões de resposta em pdfs, doxcs, textos, blogs e sites
+1.2 A estrutura da tabela deverá ter as colunas:
+	- erro, resposta do erro, data da inclusão, etc
+2. abrir um prompt para solicitar a dúvida do usuário
+3. responder a pergunta, observando:
+3.1 pesquisa na base local em chromadb e devolver a resposta(até 3 respostas no máximo)
+3.2 se não encontra nada na base local, passar a pergunta para a llm do perplexity.
+3.3.1 devolver a resposta(até 3 respostas no máximo)
+4. fim do fluxo.
+
+
+Poderia me gerar um gráfico em pdf com o fluxo acima, em português, com o gráfico claro e organizado?
+
+
+
+/////////////////////////////////////////////////////////
+
+Preciso desenvolver um sistema que será utilizado por pessoas que utilizam NFE do SEFAZ, para tirar dúvida sobre os principais erros de processamento de NFEs.
+Inicialmente, utilizaremos a arquitetura:
+
+a. acesso web pelo fastapi
+a.1. As opções serão escolhidas pelo menu da aplicação conforme os anexos: nfe.py, menu.html, nfe.js e pergunta_usuario.html
+
+b. python
+c. chromaDB
+
+d. langchain
+d.1. Utilizaremos o conceito de Agentes de IA do langchain
+d.2. Deverá conter guardrails para limitar as ações e dar segurança ao processo
+
+e. llm perplexity
+
+
+Iremos iniciar a construção do programas com a função 1, detalhada abaixo:
+1. Se o banco de dados do chromadb não existir deve-se criá-lo, caso contrário deve-se atualizar a base de conhecimentos local.
+
+1.2. A estrutura da tabela deverá prever as colunas:
+1.2.1. Código do erro, Pergunta e a resposta do erro, data da pesquisa, dentre outras.
+
+1.3. A base de dados deverá ser criada e atualizada  com as respostas aos principais erros encontrados em:
+1.3.1. No site ou qualquer outra origem da SEFAZ. 
+1.3.1.1. Prever firewall da SEFAZ para eventuais bloqueios de acesso
+1.3.2. De qualquer outra fonte confiável
+1.3.3. A pesquisa deverá contemplar conversões de resposta em pdfs, doxcs, textos, blogs e sites
+
+
+Poderia me gerar o código para essa primeira função que será chamada pelo 'opcao1' do menu em anexo, conforme a chamada da opção3 do menu?
+Obrigado!
+
+
+
+2. abrir um prompt para solicitar a dúvida do usuário
+
+3. responder a pergunta, observando:
+3.1 pesquisa na base local em chromadb e devolver a resposta(até 3 respostas no máximo)
+3.1.1 Os acessos deverá ter: aprendizado de máquina, lematização, sinônimos, erros de digitação, sinônimos com as palavras técnicas sobre nfe, semântica,etc
+
+3.2 se não encontra nada na base local, passar a pergunta para a llm do perplexity.
+3.3.1 devolver a resposta(até 3 respostas no máximo)
+4. fim do fluxo.
+
+Poderia criar apenas um protótipo apenas da arquiterura utilizando o conceito de agentes do langchain e me gerar um diagrama?
+Considere os requisitos definidos no item 1 para gerar a carga do banco ok?
+
+
+
+
+
+/////////////////////////////////////////////////// Pitch Deck
+
+Poderia me gerar então um pitch deck de até cinco minutos de duração, com imagens bem elaboradas com pano de fundo branco em .pptx conforme abaixo?
+
+PÚBLICO-ALVO
+O público-alvo do sistema de FAQ para NF-e do SEFAZ inclui contribuintes, contadores, profissionais de tecnologia da informação e demais usuários que precisam esclarecer dúvidas sobre a emissão, validação e fiscalização da Nota Fiscal Eletrônica. Essas pessoas buscam informações rápidas e confiáveis para garantir o cumprimento das obrigações fiscais de forma eficiente.
+
+JUSTIFICATIVA PARA O DESENVOLVIMENTO DO FAQ NF-E
+O acesso a informações sobre NF-e é complexo devido à dificuldade em interpretar as normas fiscais brasileiras, e a escassez de recursos confiáveis e acessíveis para a consulta torna ainda mais complicado o entendimento das NF-e. 
+
+
+CENÁRIO 
+1. Usuário: Ponto de entrada do sistema, onde o usuário interage para tirar dúvidas sobre erros de NFE.
+2. FastAPI (NFE Assistant API): A interface web principal do sistema, responsável por receber as requisições do usuário e retornar as respostas. Atua como o ponto de comunicação entre o usuário e o backend.
+3. Query Processor (Processamento de Consultas): Componente central que gerencia o fluxo de uma consulta do usuário. Ele decide se a consulta pode ser respondida pela base de conhecimento local ou se precisa de um fallback para a LLM externa.
+4. Knowledge Base (ChromaDB - Base de Conhecimento Local): O banco de dados vetorial que armazena os pares de perguntas e respostas sobre erros de NFE. É a primeira fonte de busca para as consultas do usuário.
+5. Perplexity AI (LLM Fallback): Um modelo de linguagem grande (LLM) externo que é acionado quando a base de conhecimento local não consegue fornecer uma resposta satisfatória para a consulta do usuário. Atua como um recurso de fallback para expandir a capacidade de resposta.
+6. Embeddings (Sentence Transformers - Embeddings Semânticos): Processo que converte o texto (tanto das consultas quanto dos documentos na base de conhecimento) em representações numéricas (vetores) que capturam o significado semântico, permitindo buscas por similaridade.
+7. Data Ingestion Pipeline (Pipeline de Ingestão de Dados): Um subsistema complexo responsável por coletar, processar e carregar dados de diversas fontes para a Base de Conhecimento. Inclui as seguintes etapas: 
+7.1. Data Sources (Fontes de Dados): Representa as diversas origens de informação, como documentos oficiais da SEFAZ-SP, blogs, artigos, PDFs e websites especializados em NFE. 
+7.2. Document Crawler (Identificação & Download): Componente que varre as fontes de dados (sites) para identificar e baixar documentos relevantes (PDFs, DOCXs, etc.) para processamento local. 
+7.3. PDF Processor (PyPDF2): Ferramenta específica para extrair texto bruto de arquivos PDF. * 7.4. DOCX Processor (python-docx): Ferramenta específica para extrair texto bruto de arquivos DOCX. 
+7.5. Web Scraper (BeautifulSoup/Scrapy): Ferramenta para extrair conteúdo textual diretamente de páginas web (blogs, artigos online). 
+7.6. Text Processor (Regex/NLTK): Ferramenta para processar e extrair informações de arquivos de texto genéricos, utilizando expressões regulares ou bibliotecas de PLN. 
+7.7. Data Converter (Pares Q&A): Processo que recebe o texto bruto extraído e o transforma em pares estruturados de perguntas e respostas, prontos para serem adicionados à base de conhecimento. 
+7.8. Data Ingestion (Script Python): O script final que orquestra o carregamento dos pares Q&A formatados para dentro do ChromaDB.
+8. Response Formatter (Formatação de Respostas): Componente que recebe as respostas da Base de Conhecimento ou da Perplexity AI e as formata de maneira clara e concisa para serem apresentadas ao usuário via API.
+9. Langchain Agent (Processamento Inteligente - Opcional/Alternativo): Uma representação de um agente Langchain que poderia ser usado para um processamento de consulta mais complexo, utilizando ferramentas (Tools) para buscar informações ou executar ações. No protótipo atual, o Query Processor lida com a lógica de fallback, mas um agente Langchain poderia ser integrado para cenários mais avançados.
+10. Tools (Ferramentas de Busca - Opcional/Alternativo): Ferramentas que um Langchain Agent poderia utilizar para interagir com sistemas externos ou realizar buscas específicas, complementando suas capacidades de raciocínio.
+

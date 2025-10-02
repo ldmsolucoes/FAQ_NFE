@@ -1,0 +1,49 @@
+🧠 Estrutura do Agente LangGraph
+1. Objetivo do Agente
+
+Definições gerais:
+- Se baseie nos anexos para sua elaboração:
+   'menu_nfe.html','nfe.js','nfe.py','Baixa_CSV.py'
+- Antes de gerar, observe e analise  o fluxo abaixo:
+  1. Na página 'menu_nfe.html', ao clicar no botão 'Enviar' um javascript é executado do arquivo 'nfe.js'
+  2. No arquivo 'nfe.js', o método 'initializePerguntaUsuario()' chama via Post o método python 'processar_pergunta'
+  3. No arquivo 'nfe.py' o método 'processar_pergunta' é executado, que retorna para o javascript a resposta da llm
+
+
+- Nos prompts use conceitos com: ReAct (Reasoning + Acting), (Thought / Reasoning), (Action), (Observation)
+- O banco de dados será o CrhomaDB
+-  Vamos usar  o modelo gpt-3.5-turbo conforme parâmetros abaixo:
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, api_key="Minha Chave")
+
+Criação do agente Langgraph:
+- Criar o novo agente com as funcionalidades descritas abaixo, estritamente com o mesmo conceito do arquivo 'Baixa_CSV.py'
+- Todas as funcionalidades devem estar no agente criado. Não haverá outros agentes
+
+
+Método 1: carregar base
+Base de conhecimento deverá ser criada
+
+1. Extrai dados da web (scraping/API)
+1.1. A extração de dados deve ser de sites confiáveis contendo o erro e a respectiva resposta
+1.2. Vetoriza e insere na base RAG. O tamanho do chunk deve prever perguntas longas do usuário
+1.3. As pesquisas devem prever palavras antes e depois para facilitar a pesquisa para ser mais assertiva
+
+
+Método 2: responder_pergunta
+1. Recebe pergunta do usuário
+
+Com o mínimo de alteração possível no html/javascript em anexo implementar o novo fluxo no novo método do agente langgraph:
+1. Consulta base local RAG
+1.1. Com base na criação do método 1.
+1.2. Se resposta confiável → retorna para o javascript
+1.3. Se não confiável → consulta LLM assim com está hoje
+
+
+🔁 Fluxo de Decisão
+[responder_pergunta]
+      ↓
+[consultar_base_RAG]
+      ↓
+[verificar_confiança]
+   → Se OK → [resposta_html]
+   → Se NÃO → [consultar_web_LLM] → [resposta_html]

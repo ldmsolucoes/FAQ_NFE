@@ -1,0 +1,40 @@
+### ✅ Objetivo Geral
+Criar **um único agente LangGraph** que substitui os métodos Python atuais, mantendo a integração com seu frontend HTML/JS e incorporando lógica inteligente para responder perguntas sobre NFE com base em uma base RAG e fallback via LLM.
+
+### 📁 Base de Referência
+O agente deve ser construído com base nos arquivos:
+- `menu_nfe.html` → interface do usuário
+- `nfe.js` → lógica JS que chama o backend
+- `nfe.py` → método `processar_pergunta` que responde via LLM
+- `Baixa_CSV.py` → modelo de estrutura para o novo agente
+
+
+### 🧠 Estrutura do Agente LangGraph
+
+#### 🔹 Método 1: `carregar_base`
+- Extrai dados da web (scraping/API) de sites confiáveis sobre erros e soluções de NFE
+- Vetoriza os dados e insere no **ChromaDB**
+- Usa chunking inteligente para perguntas longas
+- Indexa com contexto anterior e posterior para melhorar a precisão da busca
+
+#### 🔹 Método 2: `responder_pergunta`
+- Recebe pergunta do usuário via `initializePerguntaUsuario()` → `processar_pergunta`
+- Consulta a base RAG
+- Se resposta for confiável → retorna direto para o JS/HTML
+- Se não for confiável → consulta o modelo GPT-3.5-turbo como fallback
+
+### 🔁 Fluxo de Decisão
+```plaintext
+[responder_pergunta]
+      ↓
+[consultar_base_RAG]
+      ↓
+[verificar_confiança]
+   → Se OK → [resposta_html]
+   → Se NÃO → [consultar_web_LLM] → [resposta_html]
+```
+
+### 🧠 Extras
+- Prompts devem seguir o padrão **ReAct** (Thought → Action → Observation)
+- Integração com frontend deve exigir **mínima alteração**
+- Toda a lógica deve estar contida **em um único agente LangGraph**
