@@ -2,6 +2,10 @@
 # agent_nfe.py — Agente único LangGraph para NFE (RAG + fallback)
 from __future__ import annotations
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
+
+
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -63,10 +67,11 @@ class DummyLLM:
 try:
     if EMBEDDING_FAMILY == "openai":
         from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-        _embeddings = OpenAIEmbeddings()
+        _embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
     else:
         from langchain_huggingface import HuggingFaceEmbeddings
         _embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
 except Exception:
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
@@ -97,7 +102,14 @@ class AgentState(TypedDict, total=False):
     rag_answer: str
     final_answer: str
     confidence: float
+    refined_question: str
     error: str
+    # novos campos vindos do pesquisa_rag
+    retorno_llm: str
+    pergunta_COD: str
+    codigos: List[str]
+    pergunta_web: str
+
 
 # ===== Utilidades =====
 def ensure_vectorstore() -> Chroma:
@@ -142,26 +154,6 @@ def coletar_fontes_basicas() -> List[Dict[str, str]]:
             "solucao": "O erro 215 pode ocorrer por tag ausente, assinatura inválida ou divergência no schema utilizado."
         },
     ]
-# ===== Configuração de fontes externas =====
-_PDF_CONFIG = {
-  "nfe_erros": {
-    "link": "https://www.confaz.fazenda.gov.br/legislacao/arquivo-manuais/moc7-anexo-i-leiaute-e-rv.pdf",
-    "secoes": [
-      {
-        "secao_inicial": "4.4.1. Tabela de Códigos de Resultado de Processamento (cStat)",
-        "tipo": "tabela",
-        "campos": ["CÓDIGO", "RESULTADO DO PROCESSAMENTO DA SOLICITAÇÃO"]
-      },
-      {
-        "secao_inicial": "4.4.2. Tabela de Códigos de Rejeição",
-        "tipo": "tabela",
-        "campos": ["CÓD", "MOTIVOS DE NÃO ATENDIMENTO DA SOLICITAÇÃO"]
-      }
-    ]
-  }
-}
-
-
 
 # ===== Nó: carregar_base =====
 # ===== Configuração de fontes externas =====
@@ -283,19 +275,24 @@ from .agent_pesquisa import pesquisa_rag  # importa do novo agente
 
 def node_consultar_base_rag(state: AgentState) -> AgentState:
     pergunta = state.get("pergunta", "")
-    docs, scores = pesquisa_rag(pergunta)
-    return {**state, "docs": docs, "scores": scores}
+    docs, scores, extra = pesquisa_rag(pergunta)
+    # 🔎 Se a LLM refinadora indicar que a pergunta não é sobre NFe, vai direto para o fallback
+    if extra.get("retorno_llm") == "OUT":
+        return {**state, "retorno_llm": "OUT"}
+
+    return {**state, "docs": docs, "scores": scores, **extra}
+
+
 
 
 # ===== Roteamento por confiança =====
 def route_confidence(state: AgentState) -> Literal["OK", "FALLBACK"]:
-    if state.get("docs"):  # se houver qualquer doc, vai para RAG
+    # Se houver docs OU já houver decisão do pesquisa_rag, seguimos para gerar_resposta_rag
+    if state.get("docs") or state.get("retorno_llm") in ("COD", "SQL", "RAG", "WEB"):
         return "OK"
     return "FALLBACK"
 
 # ===== Nó: gerar_resposta_rag =====
-import re
-
 import re
 
 def node_gerar_resposta_rag(state: AgentState) -> AgentState:
@@ -305,72 +302,71 @@ def node_gerar_resposta_rag(state: AgentState) -> AgentState:
     Não modifique nenhuma outra função.
     """
 
-    docs = state.get("docs", [])
-    scores = state.get("scores", [])
+    retorno_llm = state.get("retorno_llm")
+    pergunta_original = state.get("pergunta", "")
+    pergunta_web = state.get("pergunta_web")
+    pergunta_COD = state.get("pergunta_COD")
+    codigos = state.get("codigos", [])
 
-    if not docs:
+    # Construção do user_content
+    if retorno_llm == "COD":
+        user_content = pergunta_COD
+    elif retorno_llm in ["SQL", "RAG"]:
+        user_content = f"Códigos identificados: {', '.join(codigos)}\nPergunta: {pergunta_original}"
+    elif retorno_llm == "WEB":
+        #user_content = f"Pergunta melhorada: {pergunta_web}"
+        user_content = f"Erro identificado: {pergunta_web} na Nota Fiscal Eletrônica (NFe). Explique as possíveis causas e soluções."
+
+    else:
         return {
             **state,
-            "rag_answer": "Não encontrei informações sobre esse erro na base de conhecimentos.",
-            "final_answer": "Não encontrei informações sobre esse erro na base de conhecimentos.",
+            "rag_answer": "Não encontrei informações sobre esse erro.",
+            "final_answer": "Não encontrei informações sobre esse erro.",
             "confidence": 0.0,
         }
 
-    # Pegar apenas a primeira ocorrência
-    primeiro_doc = docs[0]
-    codigo = primeiro_doc.metadata.get("codigo", "N/D")
-    descricao = (
-        primeiro_doc.metadata.get("titulo")
-        or primeiro_doc.metadata.get("descricao")
-        or "Sem descrição"
+    # Montagem do system prompt
+    system_content = (
+        "Você é um especialista em Nota Fiscal Eletrônica (NFe).\n"
+        "Use apenas informações de fontes oficiais (como nfe.fazenda.gov.br, confaz.fazenda.gov.br).\n"
+        "Sua tarefa é analisar e gerar até 3 possíveis explicações/soluções.\n\n"
+        "Regras:\n"
+        "- Cada resposta deve ser breve (até 6 linhas) e citar a fonte.\n"
+        "- Nunca invente links.\n"
+        "- Ordene da mais provável para a menos provável.\n"
+        "- Numere as respostas (1, 2, 3).\n"
+        "- Separe cada resposta com uma linha em branco."
     )
 
-    # Prompt para a LLM
     prompt = [
-        {
-            "role": "system",
-            "content": (
-                "Você é um especialista em Nota Fiscal Eletrônica (NFe).\n"
-                "Use apenas informações de fontes oficiais (como nfe.fazenda.gov.br, confaz.fazenda.gov.br) "
-                "e fontes confiáveis reconhecidas sobre NFe.\n"
-                "Sua tarefa é analisar o código de erro informado e gerar até 3 possíveis explicações/soluções.\n\n"
-                "Regras:\n"
-                "- Cada resposta deve ser breve (até 6 linhas), fundamentada, e mencionar de forma curta a fonte utilizada.\n"
-                "- Nunca invente links nem informações não verificáveis.\n"
-                "- Ordene as respostas da mais provável para a menos provável.\n"
-                "- Numere as respostas (1, 2, 3).\n"
-                "- Separe cada resposta com uma linha em branco."
-            ),
-        },
-        {
-            "role": "user",
-            "content": f"Código {codigo} — {descricao}\n\nListe até 3 respostas possíveis para esse erro, em ordem de probabilidade."
-        }
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": f"{user_content}\n\nListe até 3 respostas possíveis para esse erro."}
     ]
 
     try:
         resp = _llm_rag.invoke(prompt)
         raw_answer = getattr(resp, "content", str(resp)).strip()
-
-        # Normalizar quebras de linha
         raw_answer = raw_answer.replace("\\n", "\n")
-
-        # Só dividir quando for "1.", "2.", "3." no início ou após quebra de linha
         partes = re.split(r"(?:^|\n)(?=[123]\.)", raw_answer)
         partes = [p.strip() for p in partes if p.strip()]
-
-        # Rejuntar com espaçamento HTML
         answer = "<br><br>".join(partes)
-
     except Exception as e:
         answer = f"Erro ao consultar LLM: {e}"
 
-    conf = max(scores or [0.0])
+    # Montagem final da resposta
+    final = f"Pergunta original: {pergunta_original}<br>"
+    rq = state.get("refined_question")
+    if rq:
+        final += f"Pergunta transformada: {rq}<br>"
+    elif retorno_llm == "WEB" and pergunta_web:
+        final += f"Pergunta transformada: {pergunta_web}<br>"
+    final += f"<br>{answer}"
+
     return {
         **state,
-        "rag_answer": answer,
-        "final_answer": answer,
-        "confidence": conf,
+        "rag_answer": final,
+        "final_answer": final,
+        "confidence": 1.0,
     }
 
 
@@ -384,7 +380,7 @@ SYSTEM_FALLBACK = (
     "responda de forma breve e genérica (até 5 linhas) sem inventar detalhes."
 )
 
-def node_fallback_llm(state: AgentState) -> AgentState:
+def _node_fallback_llm(state: AgentState) -> AgentState:
     pergunta = state.get("pergunta", "")
     prompt = [
         {"role": "system", "content": SYSTEM_FALLBACK},
@@ -395,14 +391,23 @@ def node_fallback_llm(state: AgentState) -> AgentState:
     return {**state, "final_answer": answer, "confidence": 0.0}
 
 def node_fallback_llm(state: AgentState) -> AgentState:
+    #### Aqui está o hardcode do estado que é SP
     pergunta = state.get("pergunta", "")
+    uf = state.get("uf")
+
+    system_prompt = SYSTEM_FALLBACK
+    if uf:
+        system_prompt += f" Responda considerando especificamente a legislação e regras da SEFAZ-{uf}."
+
     prompt = [
-        {"role": "system", "content": SYSTEM_FALLBACK},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": pergunta},
     ]
+
     resp = _llm_fallback.invoke(prompt)
     answer = getattr(resp, "content", str(resp))
     return {**state, "final_answer": answer, "confidence": 0.0}
+
 
 
 # ===== Construção do GRAFO (on-demand) =====
@@ -413,6 +418,7 @@ def build_graph(entry_point: str) -> StateGraph:
     g.add_node("gerar_resposta_rag", node_gerar_resposta_rag)
     g.add_node("fallback_llm", node_fallback_llm)
 
+    # Condicional já decide o próximo nó
     g.add_conditional_edges(
         "consultar_base_rag", route_confidence,
         {"OK": "gerar_resposta_rag", "FALLBACK": "fallback_llm"}
@@ -421,10 +427,15 @@ def build_graph(entry_point: str) -> StateGraph:
     g.add_edge("fallback_llm", END)
 
     g.set_entry_point(entry_point)
+
     if entry_point == "carregar_base":
         g.add_edge("carregar_base", END)
+    # ⚠️ Removido: NÃO crie uma segunda aresta direta de consultar_base_rag -> gerar_resposta_rag
+    # elif entry_point == "consultar_base_rag":
+    #     g.add_edge("consultar_base_rag", "gerar_resposta_rag")
 
     return g
+
 
 def get_graph_for_base():
     return build_graph("carregar_base").compile()
@@ -440,8 +451,12 @@ def agente_carregar_base() -> Dict[str, Any]:
 
 def agente_responder_pergunta(pergunta: str) -> Dict[str, Any]:
     graph = get_graph_for_answer()
-    st = graph.invoke({"task": "responder_pergunta", "pergunta": pergunta})
-    return {"resposta": st.get("final_answer", ""), "confidence": st.get("confidence", 0.0)}
+    st = graph.invoke({"pergunta": pergunta, "uf": "SP"})
+    return {
+        "resposta": st.get("final_answer", ""),
+        "confidence": st.get("confidence", 0.0)
+    }
+
 
 # ===== Rotas FastAPI =====
 @router.get("/nfe", response_class=HTMLResponse)
