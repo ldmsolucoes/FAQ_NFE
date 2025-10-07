@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+requests
+urllib3
+pymupdf
+pandas
+langchain-core
+langchain-chroma
+langchain-text-splitters
+langgraph
+chromadb
+jinja2
+langchain-huggingface
+sentence-transformers
+torch
