@@ -9,8 +9,8 @@ O link de acesso para testes está no droplet da LDM Soluções, e será desativ
 Para iniciar o sistema no ubuntu:
 1. Coloque a sua chave no seu ambiente: export OPENAI_API_KEY='SUA CHAVE AQUI'
 2. Crie uma pasta 'nfe', por exemplo e coloque todos os arquivos e sub-diretórios contidos na pasta 'src'
-3. 
+3. Crie o ambiente com base no arquivo 'requirements_atual.txt'
+4. Ative o uvicorn: nohup uvicorn nfe.main:app --host 127.0.0.1 --port 8000 > log_agent.txt 2>&1 &
+5. Rode a aplicação no seu browser: http://146.190.170.18/nfe
 
 A LDM Soluções se reserva no direito de desativar a url abaixo a qualquer momento.
-
-http://146.190.170.18/nfe
