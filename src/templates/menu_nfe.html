@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="icon" type="imagens/ico" href="/imagens/ldm.ico">
+    <link rel="stylesheet" href="/styles/nfe.css">
+
+    <script src="/scripts/nfe.js" defer></script>
+
+    <title>Agente IA NFE- SEFAZ-SP</title>
+</head>
+<body>
+
+    <nav class="menu">
+        <div class="logo-area">
+            <img src="/imagens/logo_nfe.png" alt="LDM Soluções" />
+        </div>
+        <div style="flex-grow: 1; text-align: center; color: white; font-weight: bold; font-size: 1.2em;">
+            Bem-vindo ao seu assistente de erros na NFe gerada!
+        </div>
+    </nav>
+
+    <main id="content"></main>
+
+    <footer>
+        LDM Soluções
+    </footer>
+
+    <!-- Popup reutilizável -->
+    <div id="popup-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:999;">
+        <div id="popup-box" style="background:#fff; border-radius:10px; max-width:400px; margin:100px auto; padding:20px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+            <p id="popup-text" style="margin-bottom:20px; font-size:1em;"></p>
+            <div id="popup-buttons"></div>
+        </div>
+    </div>
+
+    <script>
+        // Conteúdo HTML da interface principal
+        const PERGUNTA_USUARIO_HTML = `
+      <div style="max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #153A6B; margin-top: 0;">Perguntas do Usuário</h2>
+
+        <div id="chat-messages" style="height: 200px; overflow-y: auto; margin-bottom: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #eee;"></div>
+
+        <div style="display: flex; gap: 10px;">
+          <input
+            type="text"
+            id="pergunta-input"
+            placeholder="Digite sua pergunta..."
+            style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"
+          >
+          <button
+            id="enviar-pergunta"
+            style="padding: 10px 20px; background: #153A6B; color: white; border: none; border-radius: 4px; cursor: pointer;"
+          >Enviar</button>
+        </div>
+
+        <div id="quick-replies-container">
+            <div class="quick-replies-buttons">
+                <button id='gerar-base-btn' onclick="confirmarAtualizacaoBase()">
+                    ⚙️⚙️ Cria nova base
+                </button>
+               <button id="btnFerramentas" onclick="menu_ferramentas()">
+                  🛠️ Ferramentas
+               </button>
+                <button onclick="limpar_chat()">
+                   🧹  Limpar
+                </button>
+            </div>
+        </div>
+      </div>
+`;
+
+        // Adiciona mensagens no chat
+        function adicionarMensagem(autor, texto) {
+            const chat = document.getElementById('chat-messages');
+            if (!chat) return;
+
+            const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const msgDiv = document.createElement('div');
+            msgDiv.innerHTML = `
+        <div style="margin: 8px 0; padding: 10px;
+                    background: ${autor === 'user' ? '#e3f2fd' : '#f0f0f0'};
+                    border-radius: 8px;
+                    ${autor === 'user' ? 'margin-left: 20%;' : 'margin-right: 20%;'}">
+          <strong>${autor === 'user' ? 'Você:' : 'Assistente:'}</strong> ${texto}
+          <div style="font-size: 0.8em; color: #666; text-align: right;">${hora}</div>
+        </div>
+      `;
+            chat.appendChild(msgDiv);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Comunicação com o backend
+        async function realizarPesquisa(pergunta) {
+            const endpoint = '/processar_pergunta';
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pergunta })
+                });
+
+                if (!response.ok) throw new Error(`Erro do servidor (${response.status})`);
+
+                const data = await response.json();
+                adicionarMensagem('assistant', data.resposta || "O Agente IA retornou uma resposta vazia.");
+            } catch (error) {
+                adicionarMensagem('assistant', `Erro ao processar pergunta. Verifique o servidor: ${error.message}`);
+            }
+        }
+
+        // Configura os botões do chat
+        function configurarInterfacePesquisa() {
+            const enviarBtn = document.getElementById('enviar-pergunta');
+            const input = document.getElementById('pergunta-input');
+
+            const enviarPergunta = () => {
+                const pergunta = input.value.trim();
+                if (pergunta) {
+                    adicionarMensagem('user', pergunta);
+                    input.value = '';
+                    realizarPesquisa(pergunta);
+                }
+            };
+
+            if (enviarBtn) enviarBtn.addEventListener('click', enviarPergunta);
+            if (input) input.addEventListener('keypress', e => {
+                if (e.key === 'Enter') enviarPergunta();
+            });
+        }
+
+        // Carrega a interface principal
+        function carregarInterfacePesquisaComoConteudoPrincipal() {
+            const contentArea = document.getElementById('content');
+            contentArea.innerHTML = PERGUNTA_USUARIO_HTML;
+            configurarInterfacePesquisa();
+        }
+
+        // Popup padrão
+        function mostrarPopup(texto, botoes) {
+            document.getElementById("popup-text").innerText = texto;
+            const botoesDiv = document.getElementById("popup-buttons");
+            botoesDiv.innerHTML = "";
+            botoes.forEach(b => {
+                const btn = document.createElement("button");
+                btn.textContent = b.texto;
+                btn.onclick = b.acao;
+                btn.style.margin = "0 8px";
+                botoesDiv.appendChild(btn);
+            });
+            document.getElementById("popup-overlay").style.display = "block";
+        }
+
+        function fecharPopup() {
+            document.getElementById("popup-overlay").style.display = "none";
+        }
+
+        // ✅ Popups chamadas pelo menu Ferramentas (sem criar novo botão)
+        function atualizarUrls() {
+            mostrarPopup(
+                "Aqui você deve colocar as novas urls para \numa nova criação da base de conhecimentos\n(Futura implementação)",
+                [{ texto: "OK", acao: fecharPopup }]
+            );
+        }
+
+        function mudarUF() {
+            mostrarPopup(
+                "Aqui você pode mudar a sigla de base\npara as pesquisas na web(UF).\nEstá com a sigla SP\n(Futura implementação)",
+                [{ texto: "OK", acao: fecharPopup }]
+            );
+        }
+
+        // Confirmação antes de recriar base
+        function confirmarAtualizacaoBase() {
+            mostrarPopup(
+                "ATENÇÃO!!!\nA base de conhecimentos será recriada.\nCertifique-se de que esse procedimento não\ncausará perda nos dados.",
+                [
+                    { texto: "Cancelar", acao: fecharPopup },
+                    { texto: "Prosseguir", acao: () => { fecharPopup(); initializeGerarBase(); } }
+                ]
+            );
+        }
+
+// Confirmação antes de limpar o chat
+function limpar_chat() {
+    mostrarPopup(
+        "ATENÇÃO!!!\nTodas as mensagens do chat atual serão apagadas.\nEsta ação não pode ser desfeita.",
+        [
+            { texto: "Cancelar", acao: fecharPopup },
+            {
+                texto: "Prosseguir",
+                acao: () => {
+                    fecharPopup();
+                    const chat = document.getElementById("chat-messages");
+                    if (chat) chat.innerHTML = ""; // limpa as mensagens
+                    adicionarMensagem("assistant", "💬 O histórico do chat foi limpo com sucesso.");
+                }
+            }
+        ]
+    );
+}
+
+
+
+
+// ================= MENU DE FERRAMENTAS (fecha ao sair da área) =====================
+function menu_ferramentas() {
+    // Remove menus anteriores
+    const existente = document.getElementById("submenu-ferramentas");
+    if (existente) existente.remove();
+
+    const botao = document.getElementById("btnFerramentas");
+    const rect = botao.getBoundingClientRect();
+
+    // Cria o menu
+    const menu = document.createElement("div");
+    menu.id = "submenu-ferramentas";
+    menu.style.position = "fixed";
+    menu.style.left = rect.left + "px";
+    menu.style.top = rect.top - 85 + "px";
+    menu.style.background = "#fff";
+    menu.style.border = "1px solid #ccc";
+    menu.style.borderRadius = "10px";
+    menu.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
+    menu.style.overflow = "hidden";
+    menu.style.zIndex = "1000";
+    menu.style.transition = "opacity 0.2s ease-in-out";
+    menu.style.opacity = "0";
+    document.body.appendChild(menu);
+    setTimeout(() => (menu.style.opacity = "1"), 20);
+
+    // Helper para criar botões
+    const criarBotao = (texto, acao) => {
+        const btn = document.createElement("button");
+        btn.textContent = texto;
+        btn.style.display = "block";
+        btn.style.width = "100%";
+        btn.style.border = "none";
+        btn.style.background = "none";
+        btn.style.padding = "10px 15px";
+        btn.style.textAlign = "left";
+        btn.style.cursor = "pointer";
+        btn.style.transition = "background 0.2s";
+        btn.onmouseover = () => (btn.style.background = "#e9f2ff");
+        btn.onmouseout = () => (btn.style.background = "none");
+        btn.onclick = () => {
+            menu.remove();
+            acao();
+        };
+        return btn;
+    };
+
+    // Opções
+    menu.appendChild(criarBotao("Atualizar URLs para download", atualizarUrls));
+    menu.appendChild(criarBotao("Mudar UF para pesquisa", mudarUF));
+
+    // 🔹 Fecha automaticamente quando o mouse sai da área do menu
+    menu.addEventListener("mouseleave", () => {
+        menu.style.opacity = "0";
+        setTimeout(() => menu.remove(), 150);
+    });
+}
+
+
+        document.addEventListener('DOMContentLoaded', carregarInterfacePesquisaComoConteudoPrincipal);
+    </script>
+
+</body>
+</html>
